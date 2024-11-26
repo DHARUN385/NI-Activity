@@ -1,0 +1,102 @@
+import ftplib
+import paramiko
+import subprocess
+import time
+import csv
+from io import BytesIO
+
+# Configuration for FTP and SFTP
+FTP_SERVER = "ftp.example.com"
+FTP_USER = "user"
+FTP_PASS = "password"
+SFTP_SERVER = "sftp.example.com"
+SFTP_USER = "user"
+SFTP_PASS = "password"
+FILE_PATH = "testfile.txt"  # Path to a sample file to transfer
+
+# File for storing results
+OUTPUT_FILE = "ftp_sftp_comparison_results.csv"
+
+
+# Function to simulate network conditions using iperf3
+def run_iperf3_test(bandwidth, delay):
+    """Simulate network conditions using iperf3"""
+    command = [
+        "iperf3", "-c", "localhost", "-b", bandwidth, "-t", "10", "-J"
+    ]  # Adjust with server IP and parameters
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout
+
+
+# Function to perform FTP file transfer and measure performance
+def ftp_transfer():
+    start_time = time.time()
+    ftp = ftplib.FTP(FTP_SERVER)
+    ftp.login(FTP_USER, FTP_PASS)
+    
+    with open(FILE_PATH, 'rb') as file:
+        ftp.storbinary(f"STOR {FILE_PATH}", file)
+
+    end_time = time.time()
+    transfer_time = end_time - start_time
+    ftp.quit()
+    
+    return transfer_time  # Return the time taken for transfer
+
+
+# Function to perform SFTP file transfer and measure performance
+def sftp_transfer():
+    start_time = time.time()
+    transport = paramiko.Transport((SFTP_SERVER, 22))
+    transport.connect(username=SFTP_USER, password=SFTP_PASS)
+    
+    sftp = paramiko.SFTPClient.from_transport(transport)
+    
+    # Using BytesIO to simulate file handling for simplicity in testing
+    with open(FILE_PATH, 'rb') as file:
+        sftp.put(file, FILE_PATH)
+
+    end_time = time.time()
+    transfer_time = end_time - start_time
+    sftp.close()
+    transport.close()
+
+    return transfer_time  # Return the time taken for transfer
+
+
+# Function to write results to CSV
+def write_to_csv(results):
+    with open(OUTPUT_FILE, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Protocol", "Transfer Time (s)", "Network Bandwidth", "Network Delay"])
+        writer.writerows(results)
+
+
+# Function to run the comparison experiments
+def run_experiments():
+    results = []
+    network_conditions = [("10M", "50ms"), ("50M", "100ms"), ("100M", "200ms")]  # Example network conditions
+
+    for bandwidth, delay in network_conditions:
+        print(f"Running experiment for FTP and SFTP with Bandwidth: {bandwidth} and Delay: {delay}")
+
+        # Simulate network conditions using iperf3 (this would ideally run on a separate server)
+        iperf3_output = run_iperf3_test(bandwidth, delay)
+        
+        # FTP Transfer
+        print("Testing FTP Transfer...")
+        ftp_time = ftp_transfer()
+        results.append(["FTP", ftp_time, bandwidth, delay])
+
+        # SFTP Transfer
+        print("Testing SFTP Transfer...")
+        sftp_time = sftp_transfer()
+        results.append(["SFTP", sftp_time, bandwidth, delay])
+
+    write_to_csv(results)
+    print("Experiments completed. Results saved to:", OUTPUT_FILE)
+
+
+# Main function to initiate the experiments
+if __name__ == "__main__":
+    run_experiments()
